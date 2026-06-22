@@ -19,6 +19,9 @@ public class PlayerTPS : MonoBehaviour
     [SerializeField] private Transform cameraTransform;
     [SerializeField] private Animator animator;
 
+    [Header("Mobile Control (Optional)")]
+    [SerializeField] private Joystick joystick; // Menampung komponen Joystick Pack
+
     private bool isGrounded;
     private CharacterController controller;
     private TPS inputActions;
@@ -101,7 +104,18 @@ public class PlayerTPS : MonoBehaviour
 
     private void HandleMovement()
     {
-        Vector3 move = new Vector3(moveInput.x, 0, moveInput.y);
+        // 1. Ambil input dari Keyboard (New Input System) sebagai dasarnya
+        Vector2 finalInput = moveInput; 
+
+        // 2. TENTUKAN PEMENANG: Jika joystick ditarik dan kekuatannya lebih besar dari keyboard,
+        // maka joystick yang berhak mengontrol karakter.
+        if (joystick != null && joystick.Direction.magnitude > finalInput.magnitude)
+        {
+            finalInput = joystick.Direction;
+        }
+
+        // 3. Masukkan nilai finalInput (bukan moveInput lagi) ke perhitungan physics
+        Vector3 move = new Vector3(finalInput.x, 0, finalInput.y);
 
         if (move.magnitude > 0.1f)
         {
@@ -120,13 +134,13 @@ public class PlayerTPS : MonoBehaviour
                 rotationSpeed * Time.deltaTime
             );
 
-            // PERBAIKAN: Jangan panggil controller.Move langsung di sini agar tidak balapan speed-nya
             finalMoveDirection = moveDirection.normalized * moveSpeed;
 
             if (animator != null) animator.SetBool("isWalk", true);
         }
         else
         {
+            // Jika finalInput bernilai 0 (joystick dilepas & keyboard gak dipencet), otomatis IDLE
             if (animator != null) animator.SetBool("isWalk", false);
         }
     }
@@ -186,6 +200,18 @@ public class PlayerTPS : MonoBehaviour
         if (lockState && animator != null)
         {
             animator.SetBool("isWalk", false);
+        }
+    }
+
+    // ================= FITUR JUMP MOBILE (BARU) =================
+    // Fungsi ini akan dipanggil setiap kali tombol JUMP di layar di-klik
+    public void TekanTombolJumpMobile()
+    {
+        // Pastikan karakter tidak sedang dikunci aksinya (misal saat minum energi drink)
+        if (!isActionsLocked && isGrounded)
+        {
+            jumpPressed = true;
+            Debug.Log("Tombol Jump Mobile Berhasil Dieksekusi!");
         }
     }
 }
