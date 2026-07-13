@@ -1,12 +1,15 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 [RequireComponent(typeof(CharacterController))]
 public class PlayerTPS : MonoBehaviour
 {
     [Header("Movement")]
-    [SerializeField] private float moveSpeed = 5f;
+    [SerializeField] private float walkSpeed = 5f; // Kecepatan normal
+    [SerializeField] private float runSpeed = 8f;  // Kecepatan saat lari
     [SerializeField] private float rotationSpeed = 10f;
+    private bool isRunning = false; // Penanda status lari
 
     [Header("Jump")]
     [SerializeField] private float jumpForce = 5f;
@@ -66,7 +69,7 @@ public class PlayerTPS : MonoBehaviour
         // Reset arah gerakan horizontal di setiap frame
         finalMoveDirection = Vector3.zero;
 
-        // PERBAIKAN: Hanya jalankan input movement & jump jika aksi TIDAK sedang dikunci (misal saat minum)
+        // Hanya jalankan input movement & jump jika aksi TIDAK sedang dikunci
         if (!isActionsLocked)
         {
             HandleMovement();
@@ -74,8 +77,12 @@ public class PlayerTPS : MonoBehaviour
         }
         else
         {
-            // Jika dikunci, paksa animasi jalan mati
-            if (animator != null) animator.SetBool("isWalk", false);
+            // Jika dikunci, paksa animasi mati
+            if (animator != null) 
+            {
+                animator.SetBool("isWalk", false);
+                animator.SetBool("isRun", false);
+            }
         }
         
         // Gabungkan gravitasi dan eksekusi movement CUKUP SATU KALI di sini
@@ -98,7 +105,6 @@ public class PlayerTPS : MonoBehaviour
         if (context.performed)
         {
             jumpPressed = true;
-            Debug.Log("Tombol Space berhasil ditekan!");
         }
     }
 
@@ -107,14 +113,13 @@ public class PlayerTPS : MonoBehaviour
         // 1. Ambil input dari Keyboard (New Input System) sebagai dasarnya
         Vector2 finalInput = moveInput; 
 
-        // 2. TENTUKAN PEMENANG: Jika joystick ditarik dan kekuatannya lebih besar dari keyboard,
-        // maka joystick yang berhak mengontrol karakter.
+        // 2. TENTUKAN PEMENANG (Joystick vs Keyboard)
         if (joystick != null && joystick.Direction.magnitude > finalInput.magnitude)
         {
             finalInput = joystick.Direction;
         }
 
-        // 3. Masukkan nilai finalInput (bukan moveInput lagi) ke perhitungan physics
+        // 3. Masukkan nilai finalInput ke perhitungan physics
         Vector3 move = new Vector3(finalInput.x, 0, finalInput.y);
 
         if (move.magnitude > 0.1f)
@@ -134,14 +139,25 @@ public class PlayerTPS : MonoBehaviour
                 rotationSpeed * Time.deltaTime
             );
 
-            finalMoveDirection = moveDirection.normalized * moveSpeed;
+            // PERBAIKAN LARI: Tentukan kecepatan saat ini berdasarkan tombol lari
+            float currentSpeed = isRunning ? runSpeed : walkSpeed;
+            finalMoveDirection = moveDirection.normalized * currentSpeed;
 
-            if (animator != null) animator.SetBool("isWalk", true);
+            // Update Animasi
+            if (animator != null) 
+            {
+                animator.SetBool("isWalk", true);
+                animator.SetBool("isRun", isRunning); // Memicu animasi lari
+            }
         }
         else
         {
-            // Jika finalInput bernilai 0 (joystick dilepas & keyboard gak dipencet), otomatis IDLE
-            if (animator != null) animator.SetBool("isWalk", false);
+            // Jika finalInput bernilai 0, otomatis IDLE
+            if (animator != null) 
+            {
+                animator.SetBool("isWalk", false);
+                animator.SetBool("isRun", false);
+            }
         }
     }
 
@@ -157,10 +173,7 @@ public class PlayerTPS : MonoBehaviour
                 {
                     animator.SetTrigger("jump");
                 }
-                
-                Debug.Log("MANTAP! Karakter berhasil lompat. VelocityY: " + velocityY);
             }
-            
             jumpPressed = false; 
         }
     }
@@ -176,11 +189,9 @@ public class PlayerTPS : MonoBehaviour
             velocityY += gravity * Time.deltaTime;
         }
 
-        // PERBAIKAN UTAMA: Satukan nilai gerak horizontal (X, Z) dengan gerak vertikal/gravitasi (Y)
         Vector3 totalMovement = finalMoveDirection;
         totalMovement.y = velocityY;
 
-        // Pintu eksekusi tunggal
         controller.Move(totalMovement * Time.deltaTime);
     }
 
@@ -200,18 +211,101 @@ public class PlayerTPS : MonoBehaviour
         if (lockState && animator != null)
         {
             animator.SetBool("isWalk", false);
+            animator.SetBool("isRun", false);
         }
     }
 
-    // ================= FITUR JUMP MOBILE (BARU) =================
-    // Fungsi ini akan dipanggil setiap kali tombol JUMP di layar di-klik
+    // ================= FITUR JUMP MOBILE =================
     public void TekanTombolJumpMobile()
     {
-        // Pastikan karakter tidak sedang dikunci aksinya (misal saat minum energi drink)
         if (!isActionsLocked && isGrounded)
         {
             jumpPressed = true;
-            Debug.Log("Tombol Jump Mobile Berhasil Dieksekusi!");
+        }
+    }
+
+    // ================= FITUR RUN MOBILE (BARU) =================
+    // Dipanggil saat tombol lari DITEKAN TAHAN (PointerDown)
+    public void MulaiLariMobile()
+    {
+        if (!isActionsLocked)
+        {
+            isRunning = true;
+            Debug.Log("Player mulai berlari!");
+        }
+    }
+
+    // Dipanggil saat tombol lari DILEPAS (PointerUp)
+    public void BerhentiLariMobile()
+    {
+        isRunning = false;
+        Debug.Log("Player kembali berjalan.");
+    }
+
+    // Tambahkan fungsi Start() baru ini di bawah fungsi Awake() atau sebelum Update()
+    private void Start()
+    {
+        // Cek apakah pemain masuk game melalui tombol Continue
+        if (PlayerPrefs.GetInt("GameDikutip", 0) == 1)
+        {
+            if (PlayerPrefs.HasKey("PlayerX"))
+            {
+                float x = PlayerPrefs.GetFloat("PlayerX");
+                float y = PlayerPrefs.GetFloat("PlayerY");
+                float z = PlayerPrefs.GetFloat("PlayerZ");
+
+                controller.enabled = false; 
+                
+                // =======================================================
+                // PERBAIKAN UTAMA: Tambahkan + 0.5f pada koordinat Y 
+                // agar player tidak spawn di dalam lantai, tapi di atasnya.
+                // =======================================================
+                transform.position = new Vector3(x, y + 1.5f, z);
+                
+                // Reset juga kecepatan gravitasi internal agar tidak ngebut ke bawah
+                velocityY = 0f; 
+                
+                controller.enabled = true; 
+
+                Debug.Log("Posisi karakter aman di atas lantai terowongan!");
+            }
+
+            PlayerPrefs.SetInt("GameDikutip", 0);
+        }
+    }
+
+    // FUNGSI BARU: Panggil fungsi ini setiap kali kamu ingin menyimpan game (misal saat teleport)
+    public void SimpanProgressGame()
+    {
+        // 1. Simpan nama Scene aktif saat ini
+        PlayerPrefs.SetString("LevelTerakhir", SceneManager.GetActiveScene().name);
+
+        // 2. Simpan koordinat X, Y, Z posisi Player saat ini
+        PlayerPrefs.SetFloat("PlayerX", transform.position.x);
+        PlayerPrefs.SetFloat("PlayerY", transform.position.y);
+        PlayerPrefs.SetFloat("PlayerZ", transform.position.z);
+
+        // 3. Amankan data ke memori
+        PlayerPrefs.Save();
+        Debug.Log("Progress koordinat posisi Player berhasil disimpan!");
+    }
+
+    // ================= FITUR AUTO-SAVE (BARU) =================
+
+    // 1. Fungsi bawaan Unity yang mendeteksi saat aplikasi/game ditutup paksa (termasuk stop Play di Editor)
+    private void OnApplicationQuit()
+    {
+        SimpanProgressGame();
+        Debug.Log("Game ditutup! Posisi terakhir berhasil di-AutoSave.");
+    }
+
+    // 2. Fungsi bawaan Unity yang mendeteksi saat game di-minimize (misal: pemain menekan tombol Home di HP)
+    private void OnApplicationPause(bool isPaused)
+    {
+        if (isPaused)
+        {
+            SimpanProgressGame();
+            Debug.Log("Game diminimize! Posisi terakhir berhasil di-AutoSave.");
         }
     }
 }

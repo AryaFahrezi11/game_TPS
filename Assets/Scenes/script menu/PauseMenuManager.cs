@@ -41,7 +41,6 @@ public class PauseMenuManager : MonoBehaviour
         if (panelPause != null) panelPause.SetActive(true); // Munculkan panel pause
         
         Time.timeScale = 0f; // BEKUKAN WAKTU DUNIA GAME TOTAL! (Animasi, gerakan, fisika berhenti)
-        isPaused = false; // Set ke false atau true sesuai state managertu jika dibutuhkan pembatasan input
         isPaused = true;
         
         Debug.Log("Game Di-pause. Waktu membeku!");
@@ -62,12 +61,22 @@ public class PauseMenuManager : MonoBehaviour
     }
 
     // 4. Fungsi untuk kembali ke Menu Utama
+    // 4. Fungsi untuk kembali ke Menu Utama
     public void KembaliKeMainMenu()
     {
+        // --- KODE BARU: Simpan posisi player sebelum pindah scene ---
+        PlayerTPS playerScript = FindObjectOfType<PlayerTPS>();
+        if (playerScript != null)
+        {
+            playerScript.SimpanProgressGame();
+            Debug.Log("Progress otomatis disimpan sebelum kembali ke menu!");
+        }
+        // -------------------------------------------------------------
+
         // Wajib kembalikan waktu ke normal dulu
         Time.timeScale = 1f; 
 
-        // Ganti "MainMenu" dengan NAMA ASLI scene Main Menu kamu di project
+        // PASTIKAN NAMA SCENE BENAR: Cek di Build Settings, apakah namanya "MainMenu" (tanpa spasi) atau "Main Menu" (pakai spasi)
         SceneManager.LoadScene("MainMenu"); 
         
         Debug.Log("Kembali ke Main Menu.");
